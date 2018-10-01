@@ -45,63 +45,62 @@ pub mod macro_internal;
 macro_rules! register_module {
     ($module:pat, $init:block) => {
         // Mark this function as a global constructor (like C++).
-        #[allow(improper_ctypes)]
+        //#[allow(improper_ctypes)]
         #[cfg_attr(target_os = "linux", link_section = ".ctors")]
         #[cfg_attr(target_os = "macos", link_section = "__DATA,__mod_init_func")]
         #[cfg_attr(target_os = "windows", link_section = ".CRT$XCU")]
-        pub static __LOAD_NEON_MODULE: extern "C" fn() = {
-            fn __init_neon_module($module: $crate::context::ModuleContext) -> $crate::result::NeonResult<()> $init
+        pub static LOAD_NEON_MODULE: extern "C" fn() = load_neon_module;
 
-            extern "C" fn __load_neon_module() {
-                // Put everything else in the ctor fn so the user fn can't see it.
-                #[repr(C)]
-                struct __NodeModule {
-                    version: i32,
-                    flags: u32,
-                    dso_handle: *mut u8,
-                    filename: *const u8,
-                    register_func: Option<extern "C" fn(
-                        $crate::handle::Handle<$crate::types::JsObject>, *mut u8, *mut u8)>,
-                    context_register_func: Option<extern "C" fn(
-                        $crate::handle::Handle<$crate::types::JsObject>, *mut u8, *mut u8, *mut u8)>,
-                    modname: *const u8,
-                    priv_data: *mut u8,
-                    link: *mut __NodeModule
-                }
+        fn __init_neon_module($module: $crate::context::ModuleContext) -> $crate::result::NeonResult<()> $init
 
-                static mut __NODE_MODULE: __NodeModule = __NodeModule {
-                    version: 0,
-                    flags: 0,
-                    dso_handle: 0 as *mut _,
-                    filename: b"neon_source.rs\0" as *const u8,
-                    register_func: Some(__register_neon_module),
-                    context_register_func: None,
-                    modname: b"neon_module\0" as *const u8,
-                    priv_data: 0 as *mut _,
-                    link: 0 as *mut _
-                };
-
-                extern "C" fn __register_neon_module(
-                        m: $crate::handle::Handle<$crate::types::JsObject>, _: *mut u8, _: *mut u8) {
-                    $crate::macro_internal::initialize_module(m, __init_neon_module);
-                }
-
-                extern "C" {
-                    fn node_module_register(module: *mut __NodeModule);
-                }
-
-                // Suppress the default Rust panic hook, which prints diagnostics to stderr.
-                ::std::panic::set_hook(::std::boxed::Box::new(|_| { }));
-
-                unsafe {
-                    // Set the ABI version based on the NODE_MODULE_VERSION constant provided by the current node headers.
-                    __NODE_MODULE.version = $crate::macro_internal::runtime::module::get_version();
-                    node_module_register(&mut __NODE_MODULE);
-                }
+        #[no_mangle]
+        extern "C" fn load_neon_module() {
+            // Put everything else in the ctor fn so the user fn can't see it.
+            #[repr(C)]
+            struct __NodeModule {
+                version: i32,
+                flags: u32,
+                dso_handle: *mut u8,
+                filename: *const u8,
+                register_func: Option<extern "C" fn(
+                    $crate::handle::Handle<$crate::types::JsObject>, *mut u8, *mut u8)>,
+                context_register_func: Option<extern "C" fn(
+                    $crate::handle::Handle<$crate::types::JsObject>, *mut u8, *mut u8, *mut u8)>,
+                modname: *const u8,
+                priv_data: *mut u8,
+                link: *mut __NodeModule
             }
 
-            __load_neon_module
-        };
+            static mut __NODE_MODULE: __NodeModule = __NodeModule {
+                version: 0,
+                flags: 0,
+                dso_handle: 0 as *mut _,
+                filename: b"neon_source.rs\0" as *const u8,
+                register_func: Some(__register_neon_module),
+                context_register_func: None,
+                modname: b"neon_module\0" as *const u8,
+                priv_data: 0 as *mut _,
+                link: 0 as *mut _
+            };
+
+            extern "C" fn __register_neon_module(
+                m: $crate::handle::Handle<$crate::types::JsObject>, _: *mut u8, _: *mut u8) {
+                $crate::macro_internal::initialize_module(m, __init_neon_module);
+            }
+
+            extern "C" {
+                fn node_module_register(module: *mut __NodeModule);
+            }
+
+            // Suppress the default Rust panic hook, which prints diagnostics to stderr.
+            ::std::panic::set_hook(::std::boxed::Box::new(|_| { }));
+
+            unsafe {
+                // Set the ABI version based on the NODE_MODULE_VERSION constant provided by the current node headers.
+                __NODE_MODULE.version = $crate::macro_internal::runtime::module::get_version();
+                node_module_register(&mut __NODE_MODULE);
+            }
+        }
     }
 }
 
